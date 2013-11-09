@@ -523,7 +523,7 @@ class MainPage(webapp2.RequestHandler):
         else:
           room.add_user(user)
           initiator = 1
-      elif room and room.get_occupancy() == 1 and debug != 'full':
+      elif room and room.get_occupancy() == MAX_USER_COUNT and debug != 'full':
         # 1 occupant.
         user = generate_random(8)
         room.add_user(user)
