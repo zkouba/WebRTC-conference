@@ -19,6 +19,8 @@ import threading
 from google.appengine.api import channel
 from google.appengine.ext import db
 
+import ast
+
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
 
@@ -26,6 +28,9 @@ jinja_environment = jinja2.Environment(
 # TODO(brave): keeping working on improving performance with thread syncing.
 # One possible method for near future is to reduce the message caching.
 LOCK = threading.RLock()
+
+
+MAX_USER_COUNT = 4
 
 def generate_random(length):
   word = ''
@@ -174,81 +179,186 @@ class Message(db.Model):
   client_id = db.StringProperty()
   msg = db.TextProperty()
 
+# class SerializableRoom(db.Model):
+#   strUser = db.StringProperty()
+
+#   def __init__(self):
+#     self.strUser = db.StringProperty()
+
+#   def __init__(self, d):
+#     self.strUser = str(d)
+
 class Room(db.Model):
   """All the data we store for a room"""
-  user1 = db.StringProperty()
-  user2 = db.StringProperty()
-  user1_connected = db.BooleanProperty(default=False)
-  user2_connected = db.BooleanProperty(default=False)
+  userStr = db.StringProperty()
+  print userStr
+  # user = ast.literal_eval(userStr)
+  # userConnected = []
+  # def __init__(self):
+  #   serializableRoom = SerializableRoom()
+  #   self.user = ast.literal_eval(serializableRoom.strUser)
+    # while (db.hasMore()):
+    #   user[db.StringProperty()] = db.BooleanProperty()
+
+  # user1 = db.StringProperty()
+  # user2 = db.StringProperty()
+  # user1_connected = db.BooleanProperty(default=False)
+  # user2_connected = db.BooleanProperty(default=False)
 
   def __str__(self):
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
     result = '['
-    if self.user1:
-      result += "%s-%r" % (self.user1, self.user1_connected)
-    if self.user2:
-      result += ", %s-%r" % (self.user2, self.user2_connected)
+    for u in dictUser:
+      if u:
+        result += "%s-%r" % (u, dictUser[u])
+      # if self.user1:
+    #   result += "%s-%r" % (self.user1, self.user1_connected)
+    # if self.user2:
+    #   result += ", %s-%r" % (self.user2, self.user2_connected)
     result += ']'
     return result
 
+  # def put(self):
+  #   ser = SerializableRoom(self.user)
+  #   self.userStr = str(self.user)
+  #   self.user = None
+  #   ser.put()
+  #   self.user = ast.literal_eval(self.userStr)
+
   def get_occupancy(self):
     occupancy = 0
-    if self.user1:
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
+    for u in dictUser:
       occupancy += 1
-    if self.user2:
-      occupancy += 1
+    #   occupancy += 1
+    # if self.user2:
+    #   occupancy += 1
     return occupancy
 
   def get_other_user(self, user):
-    if user == self.user1:
-      return self.user2
-    elif user == self.user2:
-      return self.user1
-    else:
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
+    if (len(dictUser) < 1):
       return None
+    retVal = {}
+    for u in dictUser:
+      if not u == user:
+        retVal[u] = dictUser[u]
+    return retVal
+    # if user == self.user1:
+    #   return self.user2
+    # elif user == self.user2:
+    #   return self.user1
+    # else:
+    #   return None
 
   def has_user(self, user):
-    return (user and (user == self.user1 or user == self.user2))
+    # return (user and (user == self.user1 or user == self.user2))
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
+    return user in dictUser
 
   def add_user(self, user):
-    if not self.user1:
-      self.user1 = user
-    elif not self.user2:
-      self.user2 = user
-    else:
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
+    if len(dictUser) == MAX_USER_COUNT:
       raise RuntimeError('room is full')
+    else:
+      if not self.has_user(user):
+        dictUser[user] = False
+    # if not self.user1:
+    #   self.user1 = user
+    # elif not self.user2:
+    #   self.user2 = user
+    # else:
+    #   raise RuntimeError('room is full')
+    # self.userStr = str(self.user)
+    # self.user = None
+    self.userStr = str(dictUser)
     self.put()
+    print "SAVED:" + str(self.is_saved())
+    # self.user = ast.literal_eval(self.userStr)
 
   def remove_user(self, user):
     delete_saved_messages(make_client_id(self, user))
-    if user == self.user2:
-      self.user2 = None
-      self.user2_connected = False
-    if user == self.user1:
-      if self.user2:
-        self.user1 = self.user2
-        self.user1_connected = self.user2_connected
-        self.user2 = None
-        self.user2_connected = False
-      else:
-        self.user1 = None
-        self.user1_connected = False
+    # if user == self.user2:
+    #   self.user2 = None
+    #   self.user2_connected = False
+    # if user == self.user1:
+    #   if self.user2:
+    #     self.user1 = self.user2
+    #     self.user1_connected = self.user2_connected
+    #     self.user2 = None
+    #     self.user2_connected = False
+    #   else:
+    #     self.user1 = None
+    #     self.user1_connected = False
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
+    del dictUser[user]
     if self.get_occupancy() > 0:
+      # self.userStr = str(self.user)
+      # self.user = None
       self.put()
+      # self.user = ast.literal_eval(self.userStr)
     else:
+      # self.userStr = str(self.user)
+      # self.user = None
       self.delete()
+      # self.user = ast.literal_eval(self.userStr)
+      self.userStr = str(dictUser)
 
   def set_connected(self, user):
-    if user == self.user1:
-      self.user1_connected = True
-    if user == self.user2:
-      self.user2_connected = True
-    self.put()
+    # if user == self.user1:
+    #   self.user1_connected = True
+    # if user == self.user2:
+    #   self.user2_connected = True
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
+    if user in dictUser:
+      dictUser[user] = True
+      # self.userStr = str(self.user)
+      # self.user = None
+      self.userStr = str(dictUser)
+      self.put()
+      # self.user = ast.literal_eval(self.userStr)
+      
 
   def is_connected(self, user):
-    if user == self.user1:
-      return self.user1_connected
-    if user == self.user2:
-      return self.user2_connected
+    # if user == self.user1:
+    #   return self.user1_connected
+    # if user == self.user2:
+    #   return self.user2_connected
+    dictUser = {}
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+    except ValueError, e:
+      print e
+    if user in dictUser:
+      return dictUser[user]
 
 class ConnectPage(webapp2.RequestHandler):
   def post(self):
