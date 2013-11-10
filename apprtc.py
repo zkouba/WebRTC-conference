@@ -192,7 +192,7 @@ class Message(db.Model):
 class Room(db.Model):
   """All the data we store for a room"""
   userStr = db.StringProperty()
-  print userStr
+  print "Fetched: " + str(userStr)
   # user = ast.literal_eval(userStr)
   # userConnected = []
   # def __init__(self):
@@ -208,19 +208,20 @@ class Room(db.Model):
 
   def __str__(self):
     dictUser = {}
+    result = ""
     try:
       dictUser = ast.literal_eval(self.userStr)
+      result = '['
+      for u in dictUser:
+        if u:
+          result += "%s-%r; " % (u, dictUser[u])
+        # if self.user1:
+      #   result += "%s-%r" % (self.user1, self.user1_connected)
+      # if self.user2:
+      #   result += ", %s-%r" % (self.user2, self.user2_connected)
+      result += ']'
     except ValueError, e:
-      print e
-    result = '['
-    for u in dictUser:
-      if u:
-        result += "%s-%r" % (u, dictUser[u])
-      # if self.user1:
-    #   result += "%s-%r" % (self.user1, self.user1_connected)
-    # if self.user2:
-    #   result += ", %s-%r" % (self.user2, self.user2_connected)
-    result += ']'
+      print "From Room.__str__: " + str(e)
     return result
 
   # def put(self):
@@ -232,30 +233,34 @@ class Room(db.Model):
 
   def get_occupancy(self):
     occupancy = 0
-    dictUser = {}
-    try:
-      dictUser = ast.literal_eval(self.userStr)
-    except ValueError, e:
-      print e
-    for u in dictUser:
-      occupancy += 1
+    # dictUser = {}
+    # try:
+    #   dictUser = ast.literal_eval(self.userStr)
+    # except ValueError, e:
+    #   print "From get_occupancy: " + str(e)
+
+    # for u in dictUser:
+    #   occupancy += 1
+    # occupancy = len(dictUser)
+    occupancy = self.getConnectedCount()
     #   occupancy += 1
     # if self.user2:
     #   occupancy += 1
     return occupancy
 
   def get_other_user(self, user):
+    user = self.processUserName(user)
     dictUser = {}
+    retVal = {}
     try:
       dictUser = ast.literal_eval(self.userStr)
+      if (len(dictUser) < 1):
+        return None
+      for u in dictUser:
+        if not u == user:
+          retVal[u] = dictUser[u]
     except ValueError, e:
-      print e
-    if (len(dictUser) < 1):
-      return None
-    retVal = {}
-    for u in dictUser:
-      if not u == user:
-        retVal[u] = dictUser[u]
+      print "From get_other_user: " + str(e)
     return retVal
     # if user == self.user1:
     #   return self.user2
@@ -265,39 +270,42 @@ class Room(db.Model):
     #   return None
 
   def has_user(self, user):
+    user = self.processUserName(user)
     # return (user and (user == self.user1 or user == self.user2))
     dictUser = {}
     try:
       dictUser = ast.literal_eval(self.userStr)
     except ValueError, e:
-      print e
+      print "From has_user: " + str(e)
     return user in dictUser
 
 
   def add_user(self, user):
+    user = self.processUserName(user)
     dictUser = {}
     try:
       dictUser = ast.literal_eval(self.userStr)
     except ValueError, e:
-      print e
+      print "From add_user: " + str(e)
     print '!!!!!!!!!!!!!!!!!!!!!!!!!' + str(dictUser)
-    if len(dictUser) == MAX_USER_COUNT:
-      raise RuntimeError('room is full')
+    if self.getConnectedCount() == MAX_USER_COUNT:
+      # raise RuntimeError('room is full')
+      return
     else:
       if not self.has_user(user):
         dictUser[user] = False
-    # if not self.user1:
-    #   self.user1 = user
-    # elif not self.user2:
-    #   self.user2 = user
-    # else:
-    #   raise RuntimeError('room is full')
-    # self.userStr = str(self.user)
-    # self.user = None
-    self.userStr = str(dictUser)
-    self.put()
-    print "SAVED:" + str(self.is_saved())
-    # self.user = ast.literal_eval(self.userStr)
+        # if not self.user1:
+        #   self.user1 = user
+        # elif not self.user2:
+        #   self.user2 = user
+        # else:
+        #   raise RuntimeError('room is full')
+        # self.userStr = str(self.user)
+        # self.user = None
+        self.userStr = str(dictUser)
+        self.put()
+        print "SAVED:" + str(self.is_saved())
+        # self.user = ast.literal_eval(self.userStr)
 
   def remove_user(self, user):
     delete_saved_messages(make_client_id(self, user))
@@ -313,42 +321,45 @@ class Room(db.Model):
     #   else:
     #     self.user1 = None
     #     self.user1_connected = False
+    user = self.processUserName(user)
     dictUser = {}
     try:
       dictUser = ast.literal_eval(self.userStr)
+      if user in dictUser:
+        print "Deleting user " + str(user) + " from dic " + str(dictUser)
+        del dictUser[user]
+        self.userStr = str(dictUser)
+        if self.get_occupancy() > 0:
+          # self.userStr = str(self.user)
+          # self.user = None
+          self.put()
+          # self.user = ast.literal_eval(self.userStr)
+        else:
+          # self.userStr = str(self.user)
+          # self.user = None
+          # self.user = ast.literal_eval(self.userStr)
+          self.delete()
     except ValueError, e:
-      print e
-    del dictUser[user]
-    if self.get_occupancy() > 0:
-      # self.userStr = str(self.user)
-      # self.user = None
-      self.put()
-      # self.user = ast.literal_eval(self.userStr)
-    else:
-      # self.userStr = str(self.user)
-      # self.user = None
-      self.delete()
-      # self.user = ast.literal_eval(self.userStr)
-      self.userStr = str(dictUser)
+      print "From remove_user: " + str(e)
 
   def set_connected(self, user):
     # if user == self.user1:
     #   self.user1_connected = True
     # if user == self.user2:
     #   self.user2_connected = True
+    user = self.processUserName(user)
     dictUser = {}
     try:
       dictUser = ast.literal_eval(self.userStr)
+      if user in dictUser:
+        dictUser[user] = True
+        # self.userStr = str(self.user)
+        # self.user = None
+        self.userStr = str(dictUser)
+        self.put()
+        # self.user = ast.literal_eval(self.userStr)
     except ValueError, e:
-      print e
-    if user in dictUser:
-      dictUser[user] = True
-      # self.userStr = str(self.user)
-      # self.user = None
-      self.userStr = str(dictUser)
-      self.put()
-      # self.user = ast.literal_eval(self.userStr)
-      
+      print "From set_connected: " + str(e)
 
   def is_connected(self, user):
     # if user == self.user1:
@@ -356,17 +367,39 @@ class Room(db.Model):
     # if user == self.user2:
     #   return self.user2_connected
     dictUser = {}
+    user = self.processUserName(user)
     try:
       dictUser = ast.literal_eval(self.userStr)
+      if user in dictUser:
+        return dictUser[user]
     except ValueError, e:
-      print e
-    if user in dictUser:
-      return dictUser[user]
+      print "From is_connected: " + str(e)
+    return False
+
+  def getConnectedCount(self):
+    dictUser = {}
+    count = 0
+    try:
+      dictUser = ast.literal_eval(self.userStr)
+      for u in dictUser:
+        if dictUser[u]:
+          count += 1
+    except ValueError, e:
+      print "From is_connected: " + str(e)
+    return count
+
+  def processUserName(self, userName):
+    if isinstance(userName, basestring):
+      if 'u\'' in userName:
+        return userName[2:-1]
+    return userName
+
 
 class ConnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
     room_key, user = key.split('/')
+    print "ConnectPage: key-" + str(key) + ", user-" + str(user) + ", room-" + str(room_key)
     with LOCK:
       room = Room.get_by_key_name(room_key)
       # Check if room has user in case that disconnect message comes before
@@ -384,6 +417,7 @@ class DisconnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
     room_key, user = key.split('/')
+    print "DisconnectPage: key-" + str(key) + ", user-" + str(user) + ", room-" + str(room_key)
     with LOCK:
       room = Room.get_by_key_name(room_key)
       if room and room.has_user(user):
@@ -391,10 +425,11 @@ class DisconnectPage(webapp2.RequestHandler):
         room.remove_user(user)
         logging.info('User ' + user + ' removed from room ' + room_key)
         logging.info('Room ' + room_key + ' has state ' + str(room))
-        if other_user and other_user != user:
-          channel.send_message(make_client_id(room, other_user),
-                               '{"type":"bye"}')
-          logging.info('Sent BYE to ' + other_user)
+        for u in other_user:
+          if u:
+            channel.send_message(make_client_id(room, u),
+                                 '{"type":"bye"}')
+            logging.info('Sent BYE to ' + u)
     logging.warning('User ' + user + ' disconnected from room ' + room_key)
 
 
@@ -403,6 +438,7 @@ class MessagePage(webapp2.RequestHandler):
     message = self.request.body
     room_key = self.request.get('r')
     user = self.request.get('u')
+    print "MessagePage: message-" + str(message) + ", user-" + str(user) + ", room-" + str(room_key)
     with LOCK:
       room = Room.get_by_key_name(room_key)
       if room:
@@ -499,10 +535,10 @@ class MainPage(webapp2.RequestHandler):
                                            max_value = 3000,
                                            default = 30)
 
-    unittest = self.request.get('unittest')
-    if unittest:
-      # Always create a new room for the unit tests.
-      room_key = generate_random(8)
+    # unittest = self.request.get('unittest')
+    # if unittest:
+    #   # Always create a new room for the unit tests.
+    #   room_key = generate_random(8)
 
     if not room_key:
       room_key = generate_random(8)
@@ -516,17 +552,17 @@ class MainPage(webapp2.RequestHandler):
     initiator = 0
     with LOCK:
       room = Room.get_by_key_name(room_key)
-      if not room and debug != "full":
+      if not room:
         # New room.
         user = generate_random(8)
         room = Room(key_name = room_key)
         room.add_user(user)
-        if debug != 'loopback':
-          initiator = 0
-        else:
-          room.add_user(user)
-          initiator = 1
-      elif room and room.get_occupancy() <= MAX_USER_COUNT and debug != 'full':
+        # if debug != 'loopback':
+        initiator = 0
+        # else:
+        #   room.add_user(user)
+        #   initiator = 1
+      elif room and room.get_occupancy() <= MAX_USER_COUNT:
         # 1 occupant.
         user = generate_random(8)
         room.add_user(user)
@@ -562,10 +598,10 @@ class MainPage(webapp2.RequestHandler):
                        'audio_send_codec': audio_send_codec,
                        'audio_receive_codec': audio_receive_codec
                       }
-    if unittest:
-      target_page = 'test/test_' + unittest + '.html'
-    else:
-      target_page = 'index.html'
+    # if unittest:
+    #   target_page = 'test/test_' + unittest + '.html'
+    # else:
+    target_page = 'index.html'
 
     template = jinja_environment.get_template(target_page)
     self.response.out.write(template.render(template_values))
