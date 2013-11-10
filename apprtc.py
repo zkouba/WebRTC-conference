@@ -30,7 +30,7 @@ jinja_environment = jinja2.Environment(
 LOCK = threading.RLock()
 
 
-MAX_USER_COUNT = 4
+MAX_USER_COUNT = 5
 
 def generate_random(length):
   word = ''
@@ -90,12 +90,13 @@ def handle_message(room, user, message):
     room.remove_user(user)
     logging.info('User ' + user + ' quit from room ' + room_key)
     logging.info('Room ' + room_key + ' has state ' + str(room))
-  if other_user and room.has_user(other_user):
-    if message_obj['type'] == 'offer':
+  for u in other_user:
+    if u and room.has_user(u):
+      if message_obj['type'] == 'offer':
       # Special case the loopback scenario.
-      if other_user == user:
-        message = make_loopback_answer(message)
-    on_message(room, other_user, message)
+        if u == user:
+          message = make_loopback_answer(message)
+      on_message(room, u, message)
 
 def get_saved_messages(client_id):
   return Message.gql("WHERE client_id = :id", id=client_id)
@@ -272,12 +273,14 @@ class Room(db.Model):
       print e
     return user in dictUser
 
+
   def add_user(self, user):
     dictUser = {}
     try:
       dictUser = ast.literal_eval(self.userStr)
     except ValueError, e:
       print e
+    print '!!!!!!!!!!!!!!!!!!!!!!!!!' + str(dictUser)
     if len(dictUser) == MAX_USER_COUNT:
       raise RuntimeError('room is full')
     else:
@@ -523,7 +526,7 @@ class MainPage(webapp2.RequestHandler):
         else:
           room.add_user(user)
           initiator = 1
-      elif room and room.get_occupancy() == MAX_USER_COUNT and debug != 'full':
+      elif room and room.get_occupancy() <= MAX_USER_COUNT and debug != 'full':
         # 1 occupant.
         user = generate_random(8)
         room.add_user(user)
